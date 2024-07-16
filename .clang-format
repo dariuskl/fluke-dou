@@ -1,0 +1,2 @@
+AllowShortFunctionsOnASingleLine: Empty
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments

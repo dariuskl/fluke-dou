@@ -1,9 +1,25 @@
 // Decode logic for the Fluke 1900A DOU.
 
-#include "dou.h"
-#include "util.c"
+#include "dou.c"
 
 #include <stdbool.h>
+
+#define NUMBER_OF_DIGITS 6
+#define MAX_UNIT_LENGTH  4
+#define MAX_READING_SIZE                                                       \
+  (NUMBER_OF_DIGITS + 1  /* overflow indicator */                              \
+   + 1                   /* decimal point */                                   \
+   + MAX_UNIT_LENGTH + 2 /* line ending */                                     \
+   + 1 /* terminator */)
+
+enum unit { ms, us, MHz, kHz, NoUnit };
+
+static const char unit_texts_[5][MAX_UNIT_LENGTH] = {"ms", "us", "Mhz", "kHz",
+                                                     ""};
+
+static char *print_unit(char *buf, const int len, const enum unit value) {
+  return print_str(buf, len, unit_texts_[value]);
+}
 
 // Keeps a capture of the decoded momentary bus state.
 struct input_state {
@@ -25,15 +41,6 @@ enum data_state {
   Digit6,
   Init
 };
-
-#define NUMBER_OF_DIGITS 6
-#define MAX_UNIT_LENGTH 4
-#define MAX_READING_SIZE                                                       \
-  NUMBER_OF_DIGITS                                                             \
-  +1                        /* overflow indicator */                           \
-      + 1                   /* decimal point */                                \
-      + MAX_UNIT_LENGTH + 2 /* line ending */                                  \
-      + 1                   // terminating zero
 
 struct decoder_state {
   enum data_state data_state;
@@ -59,13 +66,4 @@ fluke1900a_determine_unit(const bool nml, const bool rng_2,
   }
   const unsigned bcd = (rng_2 ? 2U : 0U) | (nml ? 1U : 0U);
   return bcd;
-}
-
-static const char unit_texts_[5][MAX_UNIT_LENGTH] = {"ms", "us", "Mhz", "kHz",
-                                                     ""};
-
-int print_unit(struct sbuf *buf, const enum unit value) {
-  (void)buf;
-  (void)value;
-  return 0;
 }

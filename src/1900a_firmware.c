@@ -4,29 +4,26 @@
 #include "1900a.c"
 #include "msp430g2452.c"
 
-#include <stdbool.h>
-
-// port 1
-
-#define OUT_B_MASK 1U // BCD 2
-#define AS_1_MASK 2U  // LSD
-#define TX_MASK 4U
-#define RNG_2_MASK 8U
-#define NML_MASK 0x10U
-#define OVFL_MASK 0x20U
-#define AS_3_MASK 0x40 // 4SD
-#define AS_2_MASK 0x80 // 5SD
-
-// port 2
-
-#define NMUP_MASK 1U
-#define OUT_C_MASK 2U    // BCD 4
-#define OUT_D_MASK 4U    // BCD 8
-#define AS_6_MASK 8U     // MSD
-#define AS_5_MASK 0x10U  // 2SD
-#define AS_4_MASK 0x20U  // 3SD
-#define OUT_A_MASK 0x40U // BCD 1
-#define DS_MASK 0x80U
+// Masks for the I/O ports with P1 in the lower eight bits and P2 in the upper
+// eight bits.
+enum signal {
+  OUT_B = 0x0001U, // BCD 2
+  AS_1 = 0x0002U,  // LSD strobe
+  Tx = 0x0004U,
+  RNG_2 = 0x0008U,
+  NML = 0x0010U,
+  OVFL = 0x0020U,
+  AS_3 = 0x0040U, // 4SD strobe
+  AS_2 = 0x0080U, // 5SD strobe
+  nMUP = 0x0100U,
+  OUT_C = 0x0200U, // BCD 4
+  OUT_D = 0x0400U, // BCD 8
+  AS_6 = 0x0800U,  // MSD strobe
+  AS_5 = 0x1000U,  // 2SD strobe
+  AS_4 = 0x2000U,  // 3SD strobe
+  OUT_A = 0x4000U, // BCD 1
+  DS = 0x8000U
+};
 
 static struct input_state decode_signals(const uint8_t port1,
                                          const uint8_t port2) {
@@ -54,39 +51,43 @@ static struct input_state decode_signals(const uint8_t port1,
           (port1 & rng_2_mask_) != u8{0}};
 }
 
-void enable_nmup_interrupt() { P2IE |= NMUP_MASK; }
-void disable_nmup_interrupt() { P2IE &= ~NMUP_MASK; }
+void enable_nmup_interrupt() {
+  P2IE |= NMUP_MASK;
+}
+void disable_nmup_interrupt() {
+  P2IE &= ~NMUP_MASK;
+}
+
+static unsigned wait_for(enum signal signal) {
+  P2IE = signal >> 8U;
+  go_to_sleep();
+  P2IE = 0U;
+  return P1IN | P2IN << 8U;
+}
 
 int main(void) {
-  // Clear P2SEL reasonably early, because excess current will flow from
-  // the oscillator driver output at P2.7.
-  P2SEL = 0U;
-
-  // The watchdog timer will reset the device, if no nMUP signal has been
-  // detected after expiration of the longest gate time of 10 seconds.
   WDTCTL = WDT_UNLOCK | WDT_HOLD;
-  // TODO set up watchdog
 
-  BCSCTL1 = CAL_BC1_16MHz;
-  DCOCTL = CAL_DCO_16MHz;
-  BCSCTL3 = 0x24U; // ACLK = VLOCLK
+  TACTL = TACTL_SMCLK; // ues SMCLK for best resolution of serial baudrate
 
   P1OUT = 0U;
-  P1DIR = TX_MASK;
+  P1DIR = Tx;
   P1IES = 0U;
   P1REN = 0U;
 
   P2DIR = 0U;
-  P2IES = NMUP_MASK;
-  P2IE = NMUP_MASK;
+  P2IES = nMUP; // nMUP falling edge
+  P2IE = 0U;
   P2REN = 0U;
 
   enable_interrupts();
-  go_to_sleep();
 
   for (;;) {
-    const uint8_t port1 = P1IN;
-    const uint8_t port2 = P2IN;
+    // The watchdog timer will reset the device, if no nMUP signal has been
+    // detected after expiration of the longest gate time of 10 seconds.
+    // TODO set up watchdog
+
+    const unsigned input = wait_for(nMUP);
 
     const bool update_memory = (port2 & NMUP_MASK) == 0U;
     const struct input_state input_state = decode_signals(port1, port2);
@@ -128,7 +129,9 @@ __attribute__((interrupt)) void on_strobe() {
   stay_awake();
 }
 
-__attribute__((interrupt)) void on_timer() { stay_awake(); }
+__attribute__((interrupt)) void on_timer() {
+  stay_awake();
+}
 
 __attribute__((used, section(".vectors"))) static const vector vtable_[32] = {
     nullptr,     nullptr,   nullptr,     nullptr,     nullptr, nullptr,
