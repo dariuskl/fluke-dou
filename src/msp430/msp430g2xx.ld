@@ -1,18 +1,16 @@
 OUTPUT_ARCH(msp430)
 ENTRY(on_reset)
 
-MEMORY {
-    ram (rw) : ORIGIN = 0x0200, LENGTH = 256
-    info (r) : ORIGIN = 0x1000, LENGTH = 256
-    rom (rx) : ORIGIN = 0xe000, LENGTH = 8192 - 64
-    vectors : ORIGIN = 0xffc0, LENGTH = 64
-}
-
 SECTIONS {
   .vectors :
   {
     KEEP (*(.vectors))
   } > vectors
+
+  .info (NOLOAD) :
+  {
+    KEEP(*(.info))
+  } > info
 
   .rodata :
   {
@@ -65,7 +63,6 @@ SECTIONS {
     _stack = .;
     *(.stack)
   }
-
 }
 
 PROVIDE(P1IN  = 0x20);
@@ -102,10 +99,16 @@ PROVIDE(USISRH   = 0x7d);
 
 PROVIDE(WDTCTL = 0x120);
 
+PROVIDE(FCTL1 = 0x128);
+PROVIDE(FCTL2 = 0x12A);
+PROVIDE(FCTL3 = 0x12C);
+
 PROVIDE(TACTL   = 0x160);
 PROVIDE(TACCTL0 = 0x162);
 PROVIDE(TAR     = 0x170);
 PROVIDE(TACCR0  = 0x172);
 
+PROVIDE(CAL_DCO_1MHz = 0x10f6 + 8);
+PROVIDE(CAL_BC1_1MHz = 0x10f6 + 9);
 PROVIDE(CAL_DCO_16MHz = 0x10f6 + 2);
 PROVIDE(CAL_BC1_16MHz = 0x10f6 + 3);

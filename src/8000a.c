@@ -1,6 +1,24 @@
 // The 8000A DOU is comparatively bare-bones, having no range indication
 // available and thus neither decimal point nor unit.
 
+// (All durations given in ms.)
+//                              ⬐ 0 to 12.8
+//        ├──←  100 →──┼← 50 →┼←→┼────────────← 0.8 to 12.8 →────────────┤
+//        ┍━━━━━━━━━━━━┑      ┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// nT ━━━━┙            ┕━━━━━━┙  ┊                                       ┊
+//                               ┍━━━━━━┑                                ┊
+// S1 ━━━━━━━━━━━━━━━━━━━━━━━━━━━┙      ┕━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//                                                             ┍━━━━━━┑  ┊
+// S4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┙      ┕━━━━━━━━
+//    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┑  ┍━━━━━━┑  ┍━━━━━━┑  ┍━━━━━━┑  ┍━━━━━
+//  S                                   ┕━━┙      ┕━━┙      ┕━━┙      ┕━━┙
+//
+// For some reason, the strobes do not come in order, but instead
+// S1 -> S3 -> S2 -> S4. Also, there is no guarantee, which strobe comes first
+// after a rising edge of nT.
+// In pathological situations when the display flashes to indicate overload,
+// there might not be any strobes while nT is high.
+
 #include "dou.c"
 
 #define NUMBER_OF_DIGITS 4 // 3½

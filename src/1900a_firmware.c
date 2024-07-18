@@ -68,6 +68,16 @@ static unsigned wait_for(enum signal signal) {
 int main(void) {
   WDTCTL = WDT_UNLOCK | WDT_HOLD;
 
+  // Clear P2SEL reasonably early, because excess current will flow from
+  // the oscillator driver output at P2.7.
+  P2SEL = 0U;
+
+  BCSCTL1 = 0x8f;  // TODO CAL_BC1_16MHz;
+  DCOCTL = 0x8a;   // TODO CAL_DCO_16MHz;
+  BCSCTL3 = 0x24U; // ACLK = VLOCLK
+
+#define SMCLK_FREQUENCY (16000000UL)
+
   TACTL = TACTL_SMCLK; // ues SMCLK for best resolution of serial baudrate
 
   P1OUT = 0U;

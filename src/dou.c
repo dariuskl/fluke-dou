@@ -7,7 +7,6 @@ typedef unsigned char byte;
 #define SERIAL_BAUD_RATE 19200 // bps
 #define SERIAL_DATA_BITS 7
 
-__attribute__((unused))
 static char *print_str(char *buf, const int len, const char *str) {
   char *dst = buf;
   for (; *str != '\0' && buf != buf + len; ++buf, ++str) {

@@ -1,9 +1,7 @@
-// Start-up code and utilities for MSP430G2452 MCUs.
+// Start-up code and utilities for MSP430G2xx MCUs.
 
 #include <stddef.h>
 #include <stdint.h>
-
-extern int main(void);
 
 extern const volatile uint8_t P1IN;
 extern volatile uint8_t P1OUT;
@@ -32,10 +30,11 @@ extern volatile uint16_t USICTL;
 #define USI_OE     (0x0002U) // output enable
 #define USI_RESET  (0x0001U)
 extern volatile uint16_t USICCTL;
-#define USI_SMCLK  (0x0008U)
-#define USI_TACCR0 (0x0014U)
+#define USI_SMCLK       (0x0008U)
+#define USI_TACCR0      (0x0014U)
+#define USI_COUNT(bits) (((bits) & 0xfU) << 8U)
 extern volatile uint8_t USICNT;
-#define USI_COUNT(bits) ((bits & 0xfU) << 8U)
+#define USI_16BIT (0x40U)
 extern volatile uint16_t USISR;
 extern volatile uint8_t USISRL;
 
@@ -53,6 +52,19 @@ extern volatile uint16_t WDTCTL;
 #define WDT_512    (0x0002U)
 #define WDT_64     (0x0003U)
 
+#define FLASH_KEY  (0xa500U)
+extern volatile uint16_t FCTL1;
+#define FCTL1_WRITE (0xa540U)
+#define FCTL1_ERASE (0xa502U)
+extern volatile uint16_t FCTL2;
+#define FCTL2_SMCLK        (0x0080U)
+#define FCTL2_DIVIDE_BY(x) ((x)-1)
+extern volatile uint16_t FCTL3;
+#define FCTL3_FAIL  (0x0080U)
+#define FCTL3_LOCKA (0x0040U)
+#define FCTL3_LOCK  (0x0010U)
+#define FCTL3_WAIT  (0x0008U)
+
 extern volatile uint16_t TACTL;
 #define TACTL_SMCLK (0x0200U)
 #define TACTL_UP    (0x0010U) // start counting up to TACCR0
@@ -67,11 +79,14 @@ extern volatile uint16_t TACTL;
 #define TACTL_IE  (0x0002U) // enable the `timer0_a3` interrupt
 #define TACTL_IFG (0x0001U) // flag for the `timer0_a3` interrupt
 extern volatile uint16_t TACCTL0;
+#define TACCTL0_OUTMODE_TOGGLE (0x0080U)
 extern const volatile uint16_t TAR;
 extern volatile uint16_t TACCR0;
 
-extern const uint8_t CAL_DCO_16MHz;
-extern const uint8_t CAL_BC1_16MHz;
+extern const uint8_t CAL_DCO_1MHz;
+extern const uint8_t CAL_BC1_1MHz;
+
+extern int main(void);
 
 __attribute__((naked)) _Noreturn void on_reset(void) {
   // init stack pointer
@@ -112,16 +127,6 @@ __attribute__((naked)) _Noreturn void on_reset(void) {
     _init_array_start[i]();
   }
 
-  // Clear P2SEL reasonably early, because excess current will flow from
-  // the oscillator driver output at P2.7.
-  P2SEL = 0U;
-
-  BCSCTL1 = CAL_BC1_16MHz;
-  DCOCTL = CAL_DCO_16MHz;
-  BCSCTL3 = 0x24U; // ACLK = VLOCLK
-
-#define SMCLK_FREQUENCY (16000000UL)
-
   main();
 }
 
@@ -146,25 +151,3 @@ __attribute__((naked)) _Noreturn void on_reset(void) {
   } while (0)
 
 typedef void (*vector)(void);
-
-struct vtable {
-  vector unused_[16];
-  vector v16_;
-  vector v17_;
-  vector port1;
-  vector port2;
-  vector usi;
-  vector adc10;
-  vector v22_;
-  vector v23_;
-  vector timer0_a3_2;
-  vector timer0_a3;
-  vector watchdog;
-  vector comparator;
-  vector v28_;
-  vector v29_;
-  vector nmi;
-  vector reset;
-};
-_Static_assert(sizeof(struct vtable) == 32 * sizeof(void *),
-               "vector table has unexpected size");
