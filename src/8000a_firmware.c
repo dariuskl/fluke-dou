@@ -19,8 +19,8 @@ enum port2 {  // pin  | function
 };
 
 static unsigned capture_input(void) {
-  const byte port1 = P1IN;
-  const byte port2 = P2IN;
+  const u8 port1 = P1IN;
+  const u8 port2 = P2IN;
   return (port1 & Z ? INPUT_Z : 0U) | (port1 & Y ? INPUT_Y : 0U) |
          (port1 & X ? INPUT_X : 0U) | (port1 & W ? INPUT_W : 0U) |
          (port1 & T ? INPUT_T : 0U) | (port1 & S ? INPUT_S : 0U) |

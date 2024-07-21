@@ -1,9 +1,4 @@
-#define nullptr ((void *)0)
-#define bool _Bool
-
-typedef unsigned char byte;
-typedef __UINT16_TYPE__ u16;
-typedef __UINT32_TYPE__ u32;
+#include "dou.h"
 
 // The baud rate must be sufficient to transmit the whole measurement within
 // the /MUP period of approximately 100 ms.

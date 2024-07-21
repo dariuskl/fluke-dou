@@ -26,8 +26,8 @@ enum port2 {     // pin  | function
 };
 
 static unsigned capture_input(void) {
-  const byte port1 = P1IN;
-  const byte port2 = P2IN;
+  const u8 port1 = P1IN;
+  const u8 port2 = P2IN;
   return (port2 & OUT_A ? INPUT_A : 0U) | (port1 & OUT_B ? INPUT_B : 0U) |
          (port2 & OUT_C ? INPUT_C : 0U) | (port2 & OUT_D ? INPUT_D : 0U) |
          (port2 & AS_6 ? INPUT_AS6 : 0U) | (port2 & AS_5 ? INPUT_AS5 : 0U) |
@@ -87,7 +87,7 @@ int main(void) {
 
     // Once the least significant digit has been captured, the overflow status
     // and range signals are evaluated and the reading is complete.
-    const byte port1 = P1IN;
+    const u8 port1 = P1IN;
     bool overflow = port1 & OVFL;
     enum unit unit = determine_unit(port1 & NML, port1 & RNG_2,
                                     state.decimal_point_digit != 0);
@@ -126,7 +126,7 @@ static void send_serial(const char msg[static MAX_READING_SIZE]) {
     //         extra start & stop bits --v
     for (int bit = 0; bit < SERIAL_DATA_BITS + 2; ++bit) {
       go_to_sleep();
-      P1OUT = (byte)((unsigned)(P1OUT & ~Tx) | (character & 1U ? Tx : 0U));
+      P1OUT = (u8)((unsigned)(P1OUT & ~Tx) | (character & 1U ? Tx : 0U));
       character >>= 1U;
     }
     go_to_sleep();
