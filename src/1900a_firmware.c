@@ -3,37 +3,39 @@
 #include "1900a.c"
 #include "msp430/g2452.c"
 
-// Masks for the I/O ports with P1 in the lower eight bits and P2 in the upper
-// eight bits.
-enum signal {
-  OUT_B = 0x0001U, // BCD 2
-  AS_1 = 0x0002U,  // LSD strobe
-  Tx = 0x0004U,
-  RNG_2 = 0x0008U,
-  NML = 0x0010U,
-  OVFL = 0x0020U,
-  AS_3 = 0x0040U, // 4SD strobe
-  AS_2 = 0x0080U, // 5SD strobe
-  nMUP = 0x0100U,
-  OUT_C = 0x0200U, // BCD 4
-  OUT_D = 0x0400U, // BCD 8
-  AS_6 = 0x0800U,  // MSD strobe
-  AS_5 = 0x1000U,  // 2SD strobe
-  AS_4 = 0x2000U,  // 3SD strobe
-  OUT_A = 0x4000U, // BCD 1
-  DS = 0x8000U
+// Masks for the I/O ports.
+enum port1 {     // pin  | function
+  OUT_B = 0x01U, // P1.0 | BCD 2
+  AS_1 = 0x02U,  // P1.1 | LSD strobe
+  Tx = 0x04U,    // P1.2 | serial data out
+  RNG_2 = 0x08U, // P1.3 | range 2
+  NML = 0x10U,   // P1.4 |
+  OVFL = 0x20U,  // P1.5 | overflow indication
+  AS_3 = 0x40U,  // P1.6 | 4SD strobe
+  AS_2 = 0x80U,  // P1.7 | 5SD strobe
+};
+enum port2 {     // pin  | function
+  nMUP = 0x01U,  // P2.0 | memory update
+  OUT_C = 0x02U, // P2.1 | BCD 4
+  OUT_D = 0x04U, // P2.2 | BCD 8
+  AS_6 = 0x08U,  // P2.3 | MSD strobe
+  AS_5 = 0x10U,  // P2.4 | 2SD strobe
+  AS_4 = 0x20U,  // P2.5 | 3SD strobe
+  OUT_A = 0x40U, // P2.6 | BCD 1
+  DS = 0x80U     // P2.7 | decimal point strobe
 };
 
-static unsigned dcba(const unsigned input) {
-  return (input & OUT_D ? READING_D : 0U) | (input & OUT_C ? READING_C : 0U) |
-         (input & OUT_B ? READING_B : 0U) | (input & OUT_A ? READING_A : 0U);
-}
-
-static unsigned wait_for(enum signal signal) {
-  P2IE = signal >> 8U;
-  go_to_sleep();
-  P2IE = 0U;
-  return P1IN | P2IN << 8U;
+static unsigned capture_input(void) {
+  const byte port1 = P1IN;
+  const byte port2 = P2IN;
+  return (port2 & OUT_A ? INPUT_A : 0U) | (port1 & OUT_B ? INPUT_B : 0U) |
+         (port2 & OUT_C ? INPUT_C : 0U) | (port2 & OUT_D ? INPUT_D : 0U) |
+         (port2 & AS_6 ? INPUT_AS6 : 0U) | (port2 & AS_5 ? INPUT_AS5 : 0U) |
+         (port2 & AS_4 ? INPUT_AS4 : 0U) | (port1 & AS_3 ? INPUT_AS3 : 0U) |
+         (port1 & AS_2 ? INPUT_AS2 : 0U) | (port1 & AS_1 ? INPUT_AS1 : 0U) |
+         (port1 & RNG_2 ? INPUT_RNG2 : 0U) | (port1 & NML ? INPUT_NML : 0U) |
+         (port1 & OVFL ? INPUT_OVFL : 0U) | (port1 & nMUP ? INPUT_nMUP : 0U) |
+         (port1 & DS ? INPUT_DS : 0U);
 }
 
 static void send_serial(const char msg[static MAX_READING_SIZE]);
@@ -59,59 +61,40 @@ int main(void) {
 
   P1OUT = Tx;
   P1DIR = Tx;
-  P1IES = 0U;
-  P1IE = 0U;
+  P1IES = PxIES_RISING_EDGE(AS_3 | AS_2 | AS_1);
+  P1IFG = 0U;
   P1SEL = 0U;
-  P1REN = 0U;
 
   P2DIR = 0U;
-  P2IES = nMUP >> 8U; // nMUP falling edge
-  P2IE = 0U;
-  P2REN = 0U;
+  P2IES = PxIES_FALLING_EDGE(nMUP) | PxIES_RISING_EDGE(AS_6 | AS_5 | AS_4);
+  P2IFG = 0U;
 
   enable_interrupts();
 
   for (;;) {
-    // The watchdog timer will reset the device, if no nMUP signal has been
-    // detected after expiration of the longest gate time of 10 seconds.
-    // TODO set up watchdog
-
-    unsigned input = wait_for(nMUP);
-
-    if ((input & nMUP) != 0U) {
-      continue;
+    P1IE = AS_3 | AS_2 | AS_1;
+    P2IE = AS_6 | AS_5 | AS_4 | nMUP;
+    struct decoder_state state = {0U, 0, 0};
+    for (; state.next_digit <= NUMBER_OF_DIGITS;
+         state = decode(state, capture_input())) {
+      // The watchdog timer will reset the device, if no nMUP signal has been
+      // detected after expiration of the longest gate time of 10 seconds.
+      // TODO set up watchdog
+      go_to_sleep();
     }
-
-    // Initially, wait for the `AS_6` strobe that indicates the most significant
-    // digit (MSD). This ensures that decoding starts with the first complete
-    // block of digits (MSD to LSD) while `nMUP` is low.
-    input = wait_for(AS_6);
-
-    // The reading fits 32 bits: 6 strobes * 4 bit BCD digit.
-    uint32_t reading = dcba(input); // MSD
-    int decimal_point_digit = input & DS ? 6 : 0;
-
-    // For each strobe, the corresponding digit is captured and appended to the
-    // reading. If the decimal strobe is asserted during a digit strobe, the
-    // decimal point is prepended to the digit.
-    static unsigned strobes[5] = {AS_1, AS_2, AS_3, AS_4, AS_5};
-    for (int i = 5; i >= 0; --i) {
-      input = wait_for(strobes[i]);
-      reading = (reading << 4U) | dcba(input);
-      if (input & DS) {
-        reading = (reading << 4U) | DECIMAL_POINT_BCD;
-        decimal_point_digit = i;
-      }
-    }
+    P1IE = 0U;
+    P2IE = 0U;
 
     // Once the least significant digit has been captured, the overflow status
     // and range signals are evaluated and the reading is complete.
-    bool overflow = input & OVFL;
-    enum unit unit =
-        determine_unit(input & NML, input & RNG_2, decimal_point_digit != 0);
+    const byte port1 = P1IN;
+    bool overflow = port1 & OVFL;
+    enum unit unit = determine_unit(port1 & NML, port1 & RNG_2,
+                                    state.decimal_point_digit != 0);
 
     char text[MAX_READING_SIZE];
-    print_reading(text, reading, decimal_point_digit, overflow, unit);
+    print_reading(text, state.reading, state.decimal_point_digit, overflow,
+                  unit);
 
     send_serial(text);
 
@@ -119,7 +102,7 @@ int main(void) {
     //  readings, which can occur due to glitches that appear on the bus when
     //  actuating front panel switches.
     // The decoder allows multiple passes (MSD..LSD) and always updates the
-    //  reading with the digits from the latest pass.
+    // reading with the digits from the latest pass.
   }
 }
 
@@ -139,11 +122,11 @@ static void send_serial(const char msg[static MAX_READING_SIZE]) {
 
   for (int i = 0; i < MAX_READING_SIZE && msg[i] != '\0'; ++i) {
     //       make space for the start bit --vv
-    int character = STOP_BIT | (msg[i] << 1U);
+    unsigned character = STOP_BIT | ((unsigned)msg[i] << 1U);
     //         extra start & stop bits --v
     for (int bit = 0; bit < SERIAL_DATA_BITS + 2; ++bit) {
       go_to_sleep();
-      P1OUT = (P1OUT & ~Tx) | (character & 1U ? Tx : 0U);
+      P1OUT = (byte)((unsigned)(P1OUT & ~Tx) | (character & 1U ? Tx : 0U));
       character >>= 1U;
     }
     go_to_sleep();
@@ -153,8 +136,8 @@ static void send_serial(const char msg[static MAX_READING_SIZE]) {
   TACTL_STOP();
 }
 
-// Called on falling edge on /MUP.
 __attribute__((interrupt)) void on_strobe() {
+  P1IFG = 0U;
   P2IFG = 0U;
   stay_awake();
 }

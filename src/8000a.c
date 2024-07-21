@@ -26,20 +26,72 @@
   (NUMBER_OF_DIGITS + 1 /* overload indicator */ +                             \
    1 /* polarity indicator */ + 2 /* line ending */ + 1 /* terminator */)
 
-#define READING_Z            1U
-#define READING_Y            2U
-#define READING_X            4U
-#define READING_W            8U
+#define INPUT_Z            (0x0001U)
+#define INPUT_Y            (0x0002U)
+#define INPUT_X            (0x0004U)
+#define INPUT_W            (0x0008U)
+#define INPUT_T            (0x0010U)
+#define INPUT_S            (0x0020U)
+#define INPUT_S1           (0x0040U)
+#define INPUT_S4           (0x0080U)
 
-#define IS_OVERLOAD(reading) (((reading) & READING_W) != 0U)
-#define IS_POSITIVE(reading) (((reading) & READING_Y) != 0U)
+#define ZYXW(input)        ((input) & (INPUT_Z | INPUT_Y | INPUT_X | INPUT_W))
+#define IS_OVERLOAD(input) (((input) & INPUT_W) != 0U)
+#define IS_POSITIVE(input) (((input) & INPUT_Y) != 0U)
+
+struct decoder_state {
+  // The reading fits into 16 bits: 4 strobes * 4 bit BCD digit.
+  unsigned reading;
+  int next_digit;
+};
+
+struct decoder_state decode(const struct decoder_state state,
+                            const unsigned input) {
+  switch (state.next_digit) {
+  default:
+    if ((input & INPUT_T) == 0U) {
+      return (struct decoder_state){0U, 1};
+    }
+    return state;
+  case 1:
+    if ((input & INPUT_T) != 0U) {
+      return (struct decoder_state){0U, 0};
+    }
+    if ((input & INPUT_S) != 0U && (input & INPUT_S1) != 0U) {
+      return (struct decoder_state){ZYXW(input), 2};
+    }
+    return state;
+  case 2:
+  case 3:
+    if ((input & INPUT_T) != 0U) {
+      return (struct decoder_state){0U, 0};
+    }
+    if ((input & INPUT_S) != 0U) {
+      if ((input & INPUT_S4) != 0U) {
+        return (struct decoder_state){0U, 0};
+      }
+      return (struct decoder_state){(state.reading << 4U) | ZYXW(input),
+                                    state.next_digit + 1};
+    }
+    return state;
+  case 4:
+    if ((input & INPUT_T) != 0U) {
+      return (struct decoder_state){0U, 0};
+    }
+    if ((input & INPUT_S) != 0U && (input & INPUT_S4) != 0U) {
+      return (struct decoder_state){(state.reading << 4U) | ZYXW(input),
+                                    state.next_digit + 1};
+    }
+    return state;
+  }
+}
 
 static char *print_reading(char buf[static MAX_READING_SIZE],
                            const unsigned reading) {
   const unsigned msd = DIGIT(reading, 3);
   buf[0] = IS_OVERLOAD(msd) ? '>' : ' ';
   buf[1] = IS_POSITIVE(msd) ? '+' : '-';
-  buf[2] = (msd & READING_Z) ? '1' : ' ';
+  buf[2] = (msd & INPUT_Z) ? '1' : ' ';
   // digit 3 & 4 are swapped, because the strobes appear out of order
   buf[3] = bcd2digit(DIGIT(reading, 1));
   buf[4] = bcd2digit(DIGIT(reading, 2));

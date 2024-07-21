@@ -3,9 +3,8 @@
 #include "8000a.c"
 #include "msp430/g2231.c"
 
-// Masks for the I/O ports with P1 in the lower eight bits and P2 in the upper
-// eight bits.
-enum signal { // pin  | function
+// Masks for the I/O ports.
+enum port1 {  // pin  | function
   Z = 0x01U,  // P1.0 | BCD 1 ╮
   Y = 0x02U,  // P1.1 | BCD 2 ├ digit
   X = 0x04U,  // P1.2 | BCD 4 │
@@ -13,30 +12,19 @@ enum signal { // pin  | function
   T = 0x10U,  // P1.4 | inverted nT with fixed logic levels
   S = 0x20U,  // P1.5 | strobe clock
   Tx = 0x40U, // P1.6 | SDO
-  S1 = 0x80U, // P1.7 | MSD (DS1) strobe
+};
+enum port2 {  // pin  | function
+  S1 = 0x40U, // P2.6 | MSD (DS1) strobe
+  S4 = 0x80U, // P2.7 | LSD (DS4) strobe
 };
 
-static unsigned wxyz(const unsigned input) {
-  return (input & W ? READING_W : 0U) | (input & X ? READING_X : 0U) |
-         (input & Y ? READING_Y : 0U) | (input & Z ? READING_Z : 0U);
-}
-
-static unsigned wait_for_falling_edge(const enum signal signal) {
-  P1IES = signal;
-  P1IFG = 0U;
-  P1IE = signal;
-  go_to_sleep();
-  P1IE = 0U;
-  return P1IN;
-}
-
-static unsigned wait_for_rising_edge(const enum signal signal) {
-  P1IES = 0U;
-  P1IFG = 0U;
-  P1IE = signal;
-  go_to_sleep();
-  P1IE = 0U;
-  return P1IN;
+static unsigned capture_input(void) {
+  const byte port1 = P1IN;
+  const byte port2 = P2IN;
+  return (port1 & Z ? INPUT_Z : 0U) | (port1 & Y ? INPUT_Y : 0U) |
+         (port1 & X ? INPUT_X : 0U) | (port1 & W ? INPUT_W : 0U) |
+         (port1 & T ? INPUT_T : 0U) | (port1 & S ? INPUT_S : 0U) |
+         (port2 & S1 ? INPUT_S1 : 0U) | (port2 & S4 ? INPUT_S4 : 0U);
 }
 
 static void send_serial(const char msg[static MAX_READING_SIZE]);
@@ -63,42 +51,39 @@ int main(void) {
 
   // 1. Make sure to pull Tx high ASAP.
   // 2. All inputs shall have pull-ups, because the comparator outputs are OD.
-  P1OUT = Z | Y | X | W | T | S | Tx | S1;
+  P1OUT = Z | Y | X | W | T | S | Tx;
   P1DIR = Tx;
+  P1IES = PxIES_FALLING_EDGE(T) | PxIES_RISING_EDGE(S);
+  P1IFG = 0U; // setting PxIES could trigger interrupt
   P1SEL = 0U; // USI will be configured to P1.6 later to keep the line high
-  P1REN = Z | Y | X | W | T | S | S1; // enable pull-ups on all inputs
+  P1REN = Z | Y | X | W | T | S; // enable resistors on all inputs
+
+  P2OUT = S1 | S4; // all inputs shall have pull-ups
+  P2DIR = 0U;
+  P2REN = S1 | S4; // enable resistors on all inputs
 
   enable_interrupts();
 
   for (;;) {
-    // The watchdog timer will reset the device, if no measurement has been
-    // detected for a while.
-    // ACLK = VLOCLK = max. 20 kHz, according to datasheet
-    // 6 measurements per seconds, typically, according to service manual
-    // 20 kHz / 8192 = ~2,4 Hz
-    // gives enough headroom to transmit the reading at 19200 baud
-    // and allows to survive flashing display where there might be no digits
-    //  in a reading.
-    // WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192; - TODO
-
-    unsigned input = wait_for_falling_edge(T);
-
-    if ((input & T) != 0U) {
-      continue;
+    P1IE = T | S;
+    struct decoder_state state = {0U, 0};
+    for (; state.next_digit <= NUMBER_OF_DIGITS;
+         state = decode(state, capture_input())) {
+      // The watchdog timer will reset the device, if no measurement has been
+      // detected for a while.
+      // ACLK = VLOCLK = max. 20 kHz, according to datasheet
+      // 6 measurements per seconds, typically, according to service manual
+      // 20 kHz / 8192 = ~2,4 Hz
+      // gives enough headroom to transmit the reading at 19200 baud
+      // and allows to survive flashing display where there might be no digits
+      //  in a reading.
+      WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192;
+      go_to_sleep();
     }
-
-    input = wait_for_rising_edge(S1);
-
-    // The reading fits 16 bits: 4 strobes * 4 bit BCD digit.
-    uint16_t reading = wxyz(input); // MSD
-
-    for (int i = 0; i < 3; ++i) {
-      input = wait_for_rising_edge(S);
-      reading = (reading << 4U) | wxyz(input);
-    }
+    P1IE = 0U;
 
     char text[MAX_READING_SIZE];
-    print_reading(text, reading);
+    print_reading(text, state.reading);
 
     send_serial(text);
   }
@@ -120,7 +105,7 @@ static void send_serial(const char msg[static MAX_READING_SIZE]) {
   USICTL |= USI_IE;
 
   for (int i = 0; i < MAX_READING_SIZE && msg[i] != '\0'; ++i) {
-    USISR = STOP_BIT | (msg[i] << 1U); // make space for the start bit
+    USISR = STOP_BIT | ((unsigned)msg[i] << 1U); // make space for the start bit
     // extra start & stop bits as we're in SPI mode --v
     USICNT = USI_16BIT | (SERIAL_DATA_BITS + 2);
     go_to_sleep();

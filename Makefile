@@ -1,4 +1,6 @@
-CFLAGS += -Wall -Wextra -pedantic -Wno-unused-function -Wconversion -Wsign-conversion
+CFLAGS += -Wall -Wextra -Wconversion -Wsign-conversion -Werror
+CFLAGS += -pedantic -pedantic-errors
+CFLAGS += -Wno-unused-function
 CFLAGS += -std=c17
 CFLAGS += -Os
 LDFLAGS += -Lsrc/msp430 -Wl,-print-memory-usage

@@ -21,6 +21,9 @@ extern volatile uint8_t P2IE;
 extern volatile uint8_t P2SEL;
 extern volatile uint8_t P2REN;
 
+#define PxIES_FALLING_EDGE(x) (x)
+#define PxIES_RISING_EDGE(x)  (0U)
+
 extern volatile uint16_t USICTL;
 #define USI_IE     (0x1000U) // interrupt enable
 #define USI_IFG    (0x0100U) // interrupt flag
