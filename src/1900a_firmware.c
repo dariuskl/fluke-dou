@@ -1,8 +1,7 @@
 // MSP430G2452-based firmware for the 1900A DOU.
-// Drives the decode logic in `1900a.c`.
 
 #include "1900a.c"
-#include "msp430g2452.c"
+#include "msp430/g2452.c"
 
 // Masks for the I/O ports with P1 in the lower eight bits and P2 in the upper
 // eight bits.
@@ -25,37 +24,9 @@ enum signal {
   DS = 0x8000U
 };
 
-static struct input_state decode_signals(const uint8_t port1,
-                                         const uint8_t port2) {
-  return {static_cast<i8>(
-              ((port1 & as_1_mask_) != u8{0})
-                  ? 1
-                  : (((port1 & as_2_mask_) != u8{0})
-                         ? 2
-                         : (((port1 & as_3_mask_) != u8{0})
-                                ? 3
-                                : (((port2 & as_4_mask_) != u8{0})
-                                       ? 4
-                                       : (((port2 & as_5_mask_) != u8{0})
-                                              ? 5
-                                              : (((port2 & as_6_mask_) != u8{0})
-                                                     ? 6
-                                                     : 0)))))),
-          static_cast<i8>((((port2 & out_a_mask_) != u8{0}) ? u8{1} : u8{0}) |
-                          (((port1 & out_b_mask_) != u8{0}) ? u8{2} : u8{0}) |
-                          (((port2 & out_c_mask_) != u8{0}) ? u8{4} : u8{0}) |
-                          (((port2 & out_d_mask_) != u8{0}) ? u8{8} : u8{0})),
-          (port2 & ds_mask_) != u8{0},
-          (port1 & ovfl_mask_) != u8{0},
-          (port1 & nml_mask_) != u8{0},
-          (port1 & rng_2_mask_) != u8{0}};
-}
-
-void enable_nmup_interrupt() {
-  P2IE |= NMUP_MASK;
-}
-void disable_nmup_interrupt() {
-  P2IE &= ~NMUP_MASK;
+static unsigned dcba(const unsigned input) {
+  return (input & OUT_D ? READING_D : 0U) | (input & OUT_C ? READING_C : 0U) |
+         (input & OUT_B ? READING_B : 0U) | (input & OUT_A ? READING_A : 0U);
 }
 
 static unsigned wait_for(enum signal signal) {
@@ -65,6 +36,8 @@ static unsigned wait_for(enum signal signal) {
   return P1IN | P2IN << 8U;
 }
 
+static void send_serial(const char msg[static MAX_READING_SIZE]);
+
 int main(void) {
   WDTCTL = WDT_UNLOCK | WDT_HOLD;
 
@@ -72,21 +45,27 @@ int main(void) {
   // the oscillator driver output at P2.7.
   P2SEL = 0U;
 
-  BCSCTL1 = 0x8f;  // TODO CAL_BC1_16MHz;
-  DCOCTL = 0x8a;   // TODO CAL_DCO_16MHz;
+  // The higher the frequency, the better we can process the signals from the
+  // device. However, the low cost chips such as the G2231 don't have factory
+  // calibration for 16 MHz. So if one of those is to be used, the constants
+  // have to be determined by hand. The `msp430/info_util.c` can be used to
+  // store the constants to the info memory.
+  BCSCTL1 = CAL_BC1_16MHz;
+  DCOCTL = CAL_DCO_16MHz;
+#define SMCLK_FREQUENCY (16000000UL)
   BCSCTL3 = 0x24U; // ACLK = VLOCLK
 
-#define SMCLK_FREQUENCY (16000000UL)
+  TACTL = TACTL_SMCLK; // use SMCLK for best resolution of serial baudrate
 
-  TACTL = TACTL_SMCLK; // ues SMCLK for best resolution of serial baudrate
-
-  P1OUT = 0U;
+  P1OUT = Tx;
   P1DIR = Tx;
   P1IES = 0U;
+  P1IE = 0U;
+  P1SEL = 0U;
   P1REN = 0U;
 
   P2DIR = 0U;
-  P2IES = nMUP; // nMUP falling edge
+  P2IES = nMUP >> 8U; // nMUP falling edge
   P2IE = 0U;
   P2REN = 0U;
 
@@ -97,40 +76,81 @@ int main(void) {
     // detected after expiration of the longest gate time of 10 seconds.
     // TODO set up watchdog
 
-    const unsigned input = wait_for(nMUP);
+    unsigned input = wait_for(nMUP);
 
-    const bool update_memory = (port2 & NMUP_MASK) == 0U;
-    const struct input_state input_state = decode_signals(port1, port2);
-
-    if (update_memory) {
-      decoder.transit(input_state);
-    } else {
-      disable_nmup_interrupt();
-
-      const auto buffer = std::string_view{decoder.reading()};
-
-      uart_timer.start_up(u16{(smclk_frequency_Hz / serial_baud_rate) - 1});
-
-      for (const auto &character : buffer) {
-        serial.init_transmission(character);
-        unsigned bit = 0U;
-        while (serial.get_next_bit(bit)) {
-          // Wait for the first and next bit.
-          go_to_sleep();
-          P1OUT = (P1OUT & ~TX_MASK) | (bit != 0U ? 0U : TX_MASK);
-        }
-        // Wait for the last bit.
-        go_to_sleep();
-        P1OUT = P1OUT & ~TX_MASK;
-      }
-      uart_timer.stop();
-      decoder = {};
-
-      // Wait for a falling edge on /MUP.
-      enable_nmup_interrupt();
-      go_to_sleep();
+    if ((input & nMUP) != 0U) {
+      continue;
     }
+
+    // Initially, wait for the `AS_6` strobe that indicates the most significant
+    // digit (MSD). This ensures that decoding starts with the first complete
+    // block of digits (MSD to LSD) while `nMUP` is low.
+    input = wait_for(AS_6);
+
+    // The reading fits 32 bits: 6 strobes * 4 bit BCD digit.
+    uint32_t reading = dcba(input); // MSD
+    int decimal_point_digit = input & DS ? 6 : 0;
+
+    // For each strobe, the corresponding digit is captured and appended to the
+    // reading. If the decimal strobe is asserted during a digit strobe, the
+    // decimal point is prepended to the digit.
+    static unsigned strobes[5] = {AS_1, AS_2, AS_3, AS_4, AS_5};
+    for (int i = 5; i >= 0; --i) {
+      input = wait_for(strobes[i]);
+      reading = (reading << 4U) | dcba(input);
+      if (input & DS) {
+        reading = (reading << 4U) | DECIMAL_POINT_BCD;
+        decimal_point_digit = i;
+      }
+    }
+
+    // Once the least significant digit has been captured, the overflow status
+    // and range signals are evaluated and the reading is complete.
+    bool overflow = input & OVFL;
+    enum unit unit =
+        determine_unit(input & NML, input & RNG_2, decimal_point_digit != 0);
+
+    char text[MAX_READING_SIZE];
+    print_reading(text, reading, decimal_point_digit, overflow, unit);
+
+    send_serial(text);
+
+    // TODO Only complete readings are returned. This prevents erroneous
+    //  readings, which can occur due to glitches that appear on the bus when
+    //  actuating front panel switches.
+    // The decoder allows multiple passes (MSD..LSD) and always updates the
+    //  reading with the digits from the latest pass.
   }
+}
+
+static void send_serial(const char msg[static MAX_READING_SIZE]) {
+  // start timer for serial data clock
+  TACCR0 = (SMCLK_FREQUENCY / SERIAL_BAUD_RATE) - 1;
+  TACTL_START(TACTL_UP);
+
+  // configure serial output
+  P1SEL |= Tx; // USI on P1.6
+  USICCTL = USI_TACCR0;
+  USICTL = USI_PE6 | USI_LSB | USI_MASTER | USI_OE;
+  // spurious interrupt can be triggered, if USIIE is set in reset
+  while (USICTL & USI_RESET) {
+  }
+  USICTL |= USI_IE;
+
+  for (int i = 0; i < MAX_READING_SIZE && msg[i] != '\0'; ++i) {
+    //       make space for the start bit --vv
+    int character = STOP_BIT | (msg[i] << 1U);
+    //         extra start & stop bits --v
+    for (int bit = 0; bit < SERIAL_DATA_BITS + 2; ++bit) {
+      go_to_sleep();
+      P1OUT = (P1OUT & ~Tx) | (character & 1U ? Tx : 0U);
+      character >>= 1U;
+    }
+    go_to_sleep();
+    P1OUT = P1OUT | Tx;
+  }
+
+  TACTL_STOP();
 }
 
 // Called on falling edge on /MUP.
@@ -143,10 +163,8 @@ __attribute__((interrupt)) void on_timer() {
   stay_awake();
 }
 
-__attribute__((used, section(".vectors"))) static const vector vtable_[32] = {
-    nullptr,     nullptr,   nullptr,     nullptr,     nullptr, nullptr,
-    nullptr,     nullptr,   nullptr,     nullptr,     nullptr, nullptr,
-    nullptr,     nullptr,   nullptr,     nullptr,     nullptr, nullptr,
-    on_strobe,   on_strobe, default_isr, default_isr, nullptr, nullptr,
-    default_isr, on_timer,  default_isr, default_isr, nullptr, nullptr,
-    default_isr, on_reset};
+__attribute__((used, section(".vectors"))) static const struct vtable vt = {
+    .reset = on_reset,
+    .port1 = on_strobe,
+    .port2 = on_strobe,
+    .timer0_a3 = on_timer};

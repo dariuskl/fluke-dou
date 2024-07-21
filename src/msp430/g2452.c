@@ -2,11 +2,6 @@
 
 #include "g2xx.c"
 
-extern const uint8_t CAL_DCO_16MHz;
-extern const uint8_t CAL_BC1_16MHz;
-
-typedef void (*vector)(void);
-
 struct vtable {
   vector unused_[16];
   vector v16_;

@@ -2,7 +2,7 @@
 // available and thus neither decimal point nor unit.
 
 // (All durations given in ms.)
-//                              ⬐ 0 to 12.8
+//                              ⬐ 0 to 12.8    vvv this info from SM, but WTF?!
 //        ├──←  100 →──┼← 50 →┼←→┼────────────← 0.8 to 12.8 →────────────┤
 //        ┍━━━━━━━━━━━━┑      ┍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // nT ━━━━┙            ┕━━━━━━┙  ┊                                       ┊
@@ -36,12 +36,14 @@
 
 static char *print_reading(char buf[static MAX_READING_SIZE],
                            const unsigned reading) {
-  buf[0] = IS_OVERLOAD(reading >> 12U) ? '>' : ' ';
-  buf[1] = IS_POSITIVE(reading >> 12U) ? '+' : '-';
-  buf[2] = (reading >> 12U & READING_Z) != 0U ? '1' : ' ';
-  buf[3] = '0' + (reading >> 8U);
-  buf[4] = '0' + (reading >> 4U);
-  buf[5] = '0' + (reading >> 0U);
+  const unsigned msd = DIGIT(reading, 3);
+  buf[0] = IS_OVERLOAD(msd) ? '>' : ' ';
+  buf[1] = IS_POSITIVE(msd) ? '+' : '-';
+  buf[2] = (msd & READING_Z) ? '1' : ' ';
+  // digit 3 & 4 are swapped, because the strobes appear out of order
+  buf[3] = bcd2digit(DIGIT(reading, 1));
+  buf[4] = bcd2digit(DIGIT(reading, 2));
+  buf[5] = bcd2digit(DIGIT(reading, 0));
   buf[6] = '\r';
   buf[7] = '\n';
   buf[8] = '\0';

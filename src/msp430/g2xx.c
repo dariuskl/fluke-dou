@@ -76,13 +76,15 @@ extern volatile uint16_t TACTL;
   do {                                                                         \
     TACTL &= ~0x0030U;                                                         \
   } while (0)
-#define TACTL_IE  (0x0002U) // enable the `timer0_a3` interrupt
-#define TACTL_IFG (0x0001U) // flag for the `timer0_a3` interrupt
+#define TACTL_IE  (0x0002U) // enable the `timer*_a3` interrupt
+#define TACTL_IFG (0x0001U) // flag for the `timer*_a3` interrupt
 extern volatile uint16_t TACCTL0;
 #define TACCTL0_OUTMODE_TOGGLE (0x0080U)
 extern const volatile uint16_t TAR;
 extern volatile uint16_t TACCR0;
 
+extern const uint8_t CAL_DCO_16MHz;
+extern const uint8_t CAL_BC1_16MHz;
 extern const uint8_t CAL_DCO_1MHz;
 extern const uint8_t CAL_BC1_1MHz;
 

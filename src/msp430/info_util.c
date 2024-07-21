@@ -1,6 +1,7 @@
 // A utility program that writes the information memory.
+// Meant to be used with the MSP-EXP430G2 Launchpad.
 
-#include "g2231.c"
+#include "g2231.c" // TODO include the suitable header
 #include "tlv.c"
 
 __attribute__((section(".info"))) static volatile struct {
@@ -57,6 +58,8 @@ int main(void) {
   // the oscillator driver output at P2.7.
   P2SEL = 0U;
 
+  // Choosing a farily low processor frequency here, because that way it's
+  // easier to drive the flash timing generator.
   BCSCTL1 = 0x60U;
   DCOCTL = 0xc8U;
 #define SMCLK_FREQUENCY (300000UL) // 0.3 MHz typically
