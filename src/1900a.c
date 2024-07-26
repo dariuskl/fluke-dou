@@ -56,8 +56,8 @@ struct decoder_state {
   int decimal_point_digit;
 };
 
-struct decoder_state decode(const struct decoder_state state,
-                            const unsigned input) {
+static struct decoder_state decode(const struct decoder_state state,
+                                   const unsigned input) {
   switch (state.next_digit) {
   default:
     if ((input & INPUT_nMUP) == 0U) {
@@ -88,11 +88,14 @@ struct decoder_state decode(const struct decoder_state state,
       return (struct decoder_state){0U, 0, 0};
     }
     if (input & (INPUT_AS6 << (state.next_digit - 1))) {
-      // TODO put decimal point into the reading
-      //  reading = (reading << 4U) | DECIMAL_POINT_BCD;
-      return (struct decoder_state){
-          (state.reading << 4U) | DCBA(input), state.next_digit + 1,
-          IS_DECIMAL_POINT(input) ? state.next_digit : 0};
+      if (IS_DECIMAL_POINT(input)) {
+        return (struct decoder_state){state.reading << 8U |
+                                          DECIMAL_POINT_BCD << 4U | DCBA(input),
+                                      state.next_digit + 1, state.next_digit};
+      }
+      return (struct decoder_state){(state.reading << 4U) | DCBA(input),
+                                    state.next_digit + 1,
+                                    state.decimal_point_digit};
     }
     return state;
   }

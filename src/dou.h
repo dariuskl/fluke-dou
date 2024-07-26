@@ -1,4 +1,5 @@
-//
+// Definitions that need to be shared between the platform-independent logic
+// and the platform code.
 
 #ifndef DOU_H_INCLUDED
 #define DOU_H_INCLUDED

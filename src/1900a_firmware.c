@@ -85,6 +85,9 @@ int main(void) {
     P1IE = 0U;
     P2IE = 0U;
 
+    // Only complete readings are returned. This prevents erroneous readings,
+    // which can occur due to glitches that appear on the bus when actuating
+    // the front panel switches.
     // Once the least significant digit has been captured, the overflow status
     // and range signals are evaluated and the reading is complete.
     const u8 port1 = P1IN;
@@ -98,11 +101,8 @@ int main(void) {
 
     send_serial(text);
 
-    // TODO Only complete readings are returned. This prevents erroneous
-    //  readings, which can occur due to glitches that appear on the bus when
-    //  actuating front panel switches.
-    // The decoder allows multiple passes (MSD..LSD) and always updates the
-    // reading with the digits from the latest pass.
+    // TODO The decoder allows multiple passes (MSD..LSD) and always updates the
+    //  reading with the digits from the latest pass.
   }
 }
 

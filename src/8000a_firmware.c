@@ -78,6 +78,8 @@ int main(void) {
       // and allows to survive flashing display where there might be no digits
       //  in a reading.
       WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192;
+      const char cst = '0' + state.next_digit;
+      send_serial(&cst);
       go_to_sleep();
     }
     P1IE = 0U;

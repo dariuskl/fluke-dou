@@ -26,10 +26,10 @@
   (NUMBER_OF_DIGITS + 1 /* overload indicator */ +                             \
    1 /* polarity indicator */ + 2 /* line ending */ + 1 /* terminator */)
 
-#define INPUT_Z            (0x0001U)
-#define INPUT_Y            (0x0002U)
-#define INPUT_X            (0x0004U)
-#define INPUT_W            (0x0008U)
+#define INPUT_Z            (0x0001U) // BCD 1
+#define INPUT_Y            (0x0002U) // BCD 2
+#define INPUT_X            (0x0004U) // BCD 4
+#define INPUT_W            (0x0008U) // BCD 8
 #define INPUT_T            (0x0010U)
 #define INPUT_S            (0x0020U)
 #define INPUT_S1           (0x0040U)
@@ -45,8 +45,8 @@ struct decoder_state {
   int next_digit;
 };
 
-struct decoder_state decode(const struct decoder_state state,
-                            const unsigned input) {
+static struct decoder_state decode(const struct decoder_state state,
+                                   const unsigned input) {
   switch (state.next_digit) {
   default:
     if ((input & INPUT_T) == 0U) {
