@@ -68,7 +68,7 @@ static struct decoder_state decode(const struct decoder_state state,
     }
     if ((input & INPUT_S) != 0U) {
       if ((input & INPUT_S4) != 0U) {
-        return (struct decoder_state){0U, 0};
+        return (struct decoder_state){0U, 1};
       }
       return (struct decoder_state){(state.reading << 4U) | ZYXW(input),
                                     state.next_digit + 1};

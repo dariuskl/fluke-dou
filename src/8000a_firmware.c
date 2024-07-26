@@ -59,7 +59,7 @@ int main(void) {
   P1REN = Z | Y | X | W | T | S; // enable resistors on all inputs
 
   P2OUT = S1 | S4; // all inputs shall have pull-ups
-  P2DIR = 0U;
+  P2DIR = 0U;      // all pins are input
   P2REN = S1 | S4; // enable resistors on all inputs
 
   enable_interrupts();
@@ -77,9 +77,11 @@ int main(void) {
       // gives enough headroom to transmit the reading at 19200 baud
       // and allows to survive flashing display where there might be no digits
       //  in a reading.
-      WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192;
-      const char cst = '0' + state.next_digit;
-      send_serial(&cst);
+      //WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192;
+      //P1IE = 0U;
+      //const char cst[2] = {(char)('0' + state.next_digit), '\0'};
+      //send_serial(cst);
+      //P1IE = T | S;
       go_to_sleep();
     }
     P1IE = 0U;
