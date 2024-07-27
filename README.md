@@ -2,19 +2,25 @@
 
 Jumbo builds
 targeting MSP430G2xx
- - easy-to-use
- - cheap
- - obtainable
- - most modern 5V parts just have internal regulators due to lithography,
-   so we'd just be saving us the level shifting, but for some devices
-   conditioning is required anyway
- - simply C code that should be easily portable to other devices
+
+- easy-to-use
+- cheap
+- obtainable
+- most modern 5V parts just have internal regulators due to lithography,
+  so we'd just be saving us the level shifting, but for some devices
+  conditioning is required anyway
+- simply C code that should be easily portable to other devices
 
 ## 8000A
 
 ### Modifications Required for Battery Pack (Option -01)
 
 ### Theory of Operation
+
+| Digit    | W        | X     | Y        | Z     |
+|----------|----------|-------|----------|-------|
+| DS1      | overload | ?     | polarity | MSD   |
+| DS2..DS4 | BCD 8    | BCD 4 | BCD 2    | BCD 1 |
 
 #### Signal Conditioning
 

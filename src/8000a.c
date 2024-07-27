@@ -16,8 +16,10 @@
 // For some reason, the strobes do not come in order, but instead
 // S1 -> S3 -> S2 -> S4. Also, there is no guarantee, which strobe comes first
 // after a rising edge of nT.
-// In pathological situations when the display flashes to indicate overload,
-// there might not be any strobes while nT is high.
+// When the display flashes to indicate overload, there are strobes only every
+// second period of nT.
+// There is a systematic glitch in the clock's high cycle when it coincides
+// with S1 or S4.
 
 #include "dou.c"
 
@@ -66,7 +68,8 @@ static struct decoder_state decode(const struct decoder_state state,
     if ((input & INPUT_T) != 0U) {
       return (struct decoder_state){0U, 0};
     }
-    if ((input & INPUT_S) != 0U) {
+    // the clock has systematic glitches on S1 & S4
+    if ((input & INPUT_S) != 0U && (input & INPUT_S1) == 0U) {
       if ((input & INPUT_S4) != 0U) {
         return (struct decoder_state){0U, 1};
       }
