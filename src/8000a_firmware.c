@@ -66,6 +66,7 @@ int main(void) {
 
   for (;;) {
     P1IE = T | S;
+    P1SEL = 0U; // GPIO on P1.6
     struct decoder_state state = {0U, 0};
     for (; state.next_digit <= NUMBER_OF_DIGITS;
          state = decode(state, capture_input())) {
@@ -82,7 +83,9 @@ int main(void) {
       //const char cst[2] = {(char)('0' + state.next_digit), '\0'};
       //send_serial(cst);
       //P1IE = T | S;
+      P1OUT &= (u8)~Tx;
       go_to_sleep();
+      P1OUT |= Tx;
     }
     P1IE = 0U;
 

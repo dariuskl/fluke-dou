@@ -19,7 +19,8 @@
 // When the display flashes to indicate overload, there are strobes only every
 // second period of nT.
 // There is a systematic glitch in the clock's high cycle when it coincides
-// with S1 or S4.
+// with S1 or S4, which is why the original DOU has a low-pass filter on that
+// line (15k/68p).
 
 #include "dou.c"
 
