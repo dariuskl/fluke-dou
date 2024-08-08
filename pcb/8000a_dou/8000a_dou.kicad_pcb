@@ -5,6 +5,10 @@
   )
 
   (paper "A5" portrait)
+  (title_block
+    (title "8000 DOU")
+  )
+
   (layers
     (0 "F.Cu" signal)
     (31 "B.Cu" signal)
