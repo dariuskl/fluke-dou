@@ -65,8 +65,6 @@ int main(void) {
   enable_interrupts();
 
   for (;;) {
-    P1IE = T;
-    go_to_sleep();
     P1IE = S;
     struct decoder_state state = {0U, 0};
     for (; state.next_digit <= NUMBER_OF_DIGITS;

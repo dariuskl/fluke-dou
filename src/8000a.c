@@ -87,6 +87,12 @@ static struct decoder_state decode(const struct decoder_state state,
                                     state.next_digit + 1};
     }
     return state;
+  case 5:
+    // wait for the end of the period, until T goes high again
+    if ((input & INPUT_T) != 0U) {
+      return (struct decoder_state){0U, 0};
+    }
+    return state;
   }
 }
 

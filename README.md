@@ -44,6 +44,8 @@ Not all signals have suitable logic levels to interface to a 5 V µC (let alone
 the 3.3 V MSP430), so comparators are used to condition the signals according
 to the thresholds that I determined for each signal.
 
+(Note that the given high and low voltage levels are ballpark figures.)
+
 | Pin | Signal | Description        | Low level | High level  | Threshold |
 |-----|--------|--------------------|-----------|-------------|-----------|
 | 0   | nT     | Measurement period | 1.2 V     | 4.8 V       | 2.5 V     |
