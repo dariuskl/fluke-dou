@@ -13,9 +13,9 @@ enum port1 {  // pin  | function
   S = 0x20U,  // P1.5 | strobe clock
   Tx = 0x40U, // P1.6 | SDO
 };
-enum port2 {  // pin  | function
-  S1 = 0x40U, // P2.6 | MSD (DS1) strobe
-  S4 = 0x80U, // P2.7 | LSD (DS4) strobe
+enum port2 {  // pin       | function
+  S1 = 0x40U, // P2.6/XIN  | MSD (DS1) strobe
+  S4 = 0x80U, // P2.7/XOUT | LSD (DS4) strobe
 };
 
 static unsigned capture_input(void) {
@@ -65,8 +65,9 @@ int main(void) {
   enable_interrupts();
 
   for (;;) {
-    P1IE = T | S;
-    P1SEL = 0U; // GPIO on P1.6
+    P1IE = T;
+    go_to_sleep();
+    P1IE = S;
     struct decoder_state state = {0U, 0};
     for (; state.next_digit <= NUMBER_OF_DIGITS;
          state = decode(state, capture_input())) {
@@ -79,13 +80,7 @@ int main(void) {
       // and allows to survive flashing display where there might be no digits
       //  in a reading.
       //WDTCTL = WDT_UNLOCK | WDT_CLEAR | WDT_ACLK | WDT_8192;
-      //P1IE = 0U;
-      //const char cst[2] = {(char)('0' + state.next_digit), '\0'};
-      //send_serial(cst);
-      //P1IE = T | S;
-      P1OUT &= (u8)~Tx;
       go_to_sleep();
-      P1OUT |= Tx;
     }
     P1IE = 0U;
 
