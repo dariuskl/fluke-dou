@@ -1,17 +1,30 @@
 # Data Output Units for Vintage Fluke Meters
 
-Jumbo builds
-targeting MSP430G2xx
+This is a collection of firmware and PCBs mean to be used in vintage Fluke
+meters such as the 8000A, 1900A, etc. They provide the measurements of the
+meter on a USB serial port and might also provide other features such as
+the possibility to power the meter via that USB port.
 
-- easy-to-use
-- cheap
-- obtainable
-- most modern 5V parts just have internal regulators due to lithography,
-  so we'd just be saving us the level shifting, but for some devices
-  conditioning is required anyway
-- simply C code that should be easily portable to other devices
+The firmware targets the MSP430G2xx series of microcontrollers despite them
+being neither vintage nor 5 V devices. They were chosen due to their good
+availability, ease-of-use, good compiler support, wide range of package
+options (including DIP), and affordability. (Most modern 5V parts just have
+internal regulators anyway, due to modern lithography, so we' just be saving
+us the level shifting, but some devices require more than a level shifter
+anyway.)
 
-## 8000A
+Code is written in C, decode logic and platform-specific stuff is separated
+as much as possible. So porting this to a different controller should be
+straight-forward. The build is run by `make` as a jumbo build.
+
+## 1900A — Multi-Counter
+
+- PCB is already designed
+- C++ code exists, also ported here, but not yet tested
+
+See https://github.com/dariuskl/fluke_1900a_usb_dou
+
+## 8000A — Digital Multimeter
 
 **Firmware** — first working version available with tag `8000a-fw-1`
 **Hardware** — PCB not yet designed, working on perfboard prototype
@@ -36,9 +49,16 @@ a few jumper wires, though.
 
 ### Finger Connector Pinout
 
+The finger conector is a card edge connector at the back of the main PCB. It
+is double-sides, i.e. there might be different signals on the top and bottom
+side of the board. Most handily, the Fluke engineers put some pracitcal vias
+with a 2.54 mm pitch through ten of those connections, plus one extra via to
+the side, but perfectly in grid. This is where a 11-position pin receptable
+will find its place.
+
 The signal `nT` is actually not part of the finger connector, but it does have
-a strategically placed via. As it is even above pin 1 of the finger connector,
-I assigned it the pin number zero.
+a strategically placed via. As it is next to pin 1 of the finger connector, I
+assigned it the pin number zero.
 
 Not all signals have suitable logic levels to interface to a 5 V µC (let alone
 the 3.3 V MSP430), so comparators are used to condition the signals according

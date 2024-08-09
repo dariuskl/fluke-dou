@@ -5,7 +5,9 @@ CFLAGS += -std=c17
 CFLAGS += -Os
 LDFLAGS += -Lsrc/msp430 -Wl,-print-memory-usage
 
-.PHONY all: build/msp430g2452_1900a \
+.PHONY: all
+
+all: build/msp430g2452_1900a \
 			build/msp430g2231_8000a \
 			build/msp430g2231_info_util \
 			build/tlv_test \
